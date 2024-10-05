@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import dotenv from "dotenv";
+import userAuthRoutes from "./routes/userAuthRoutes";
 
 const app = express();
 dotenv.config();
@@ -16,6 +17,8 @@ app.get("/", (req: Request, res: Response) => {
     Status: "Active",
   });
 });
+
+app.use(userAuthRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
