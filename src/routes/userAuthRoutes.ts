@@ -3,6 +3,6 @@ import { fetchModes } from "../controller/userAuthController";
 
 const router = Router();
 
-router.post("/v0.5/users/auth/fetch-modes", fetchModes);
+router.post("/fetch-modes", fetchModes);
 
 export default router;
