@@ -4,12 +4,13 @@ import { Buffer } from "buffer";
 import { v4 as uuidv4 } from "uuid";
 
 export const getGatewayAccessToken = async (): Promise<string> => {
-  const GATEWAY_URL = "https://dev.abdm.gov.in/gateway/v0.5/sessions";
+  const GATEWAY_URL = "https://dev.abdm.gov.in/api/hiecm/gateway/v3/sessions";
   const headers = { "Content-Type": "application/json" };
 
   const bodyParams = JSON.stringify({
     clientId: "SBX_002737",
     clientSecret: "0268b4b2-6a4e-4ea4-8142-6a1d8d14b3c7",
+    grantType: "client_credentials",
   });
 
   try {
