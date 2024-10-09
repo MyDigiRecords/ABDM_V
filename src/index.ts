@@ -4,11 +4,11 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import userAuthRoutes from "./routes/userAuthRoutes";
 
-const app = express();
 dotenv.config();
 
-app.use(cors());
+const app = express();
 app.use(express.json());
+app.use(cors());
 app.use(morgan("dev"));
 
 app.get("/", (req: Request, res: Response) => {
@@ -18,7 +18,8 @@ app.get("/", (req: Request, res: Response) => {
   });
 });
 
-app.use(userAuthRoutes);
+// Mount routes
+app.use("/api/v1", userAuthRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -4,19 +4,22 @@ import { v4 as uuidv4 } from "uuid";
 import { getGatewayAccessToken } from "../utils/helper";
 import { MongoClient } from "mongodb";
 
+// DB Connection
 const connectToDB = async () => {
   const uri = process.env.ABDM_MONGODB_URL!;
   const client = new MongoClient(uri);
   await client.connect();
   return client.db("abdm_M1").collection("M1_data");
 };
-export const fetchModes = async (req: Request, res: Response) => {
+
+// 1. Link Token Generation
+export const generateLinkToken = async (req: Request, res: Response) => {
   try {
     const requestBody = req.body;
-    const healthID = requestBody.id;
+    const healthID = requestBody.id || requestBody.abhaAddress;
 
     if (!healthID || !requestBody.requester) {
-      res
+      return res
         .status(400)
         .json({ error: "Invalid request. Health ID or requester is missing." });
     }
@@ -36,10 +39,11 @@ export const fetchModes = async (req: Request, res: Response) => {
         requester: requestBody.requester,
       },
     };
+
     let response;
     try {
       response = await axios.post(
-        "https://dev.abdm.gov.in/gateway/v0.5/users/auth/fetch-modes",
+        process.env.LINK_TOKEN_GENERATE_URL!,
         requestPayload,
         { headers: newHeaders }
       );
@@ -47,63 +51,42 @@ export const fetchModes = async (req: Request, res: Response) => {
       const axiosError = error as AxiosError;
       console.error("Error during API request:", axiosError.message);
       if (axiosError.response) {
-        res.status(axiosError.response.status).json({
+        return res.status(axiosError.response.status).json({
           error: `Error from external API: ${axiosError.response.data}`,
         });
       } else if (axiosError.request) {
-        res.status(502).json({
+        return res.status(502).json({
           error: "No response received from external API",
         });
       } else {
-        res.status(500).json({
+        return res.status(500).json({
           error: "Unexpected error during external API request",
         });
       }
-      return;
-    }
-    let M1Database;
-    try {
-      M1Database = await connectToDB();
-    } catch (dbError) {
-      console.error("Error connecting to database:", dbError);
-      res.status(500).json({ error: "Database connection failed" });
-      return;
     }
 
-    try {
-      const existingRecord = await M1Database.findOne({ healthID });
-      if (existingRecord) {
-        await M1Database.updateOne(
-          { healthID },
-          {
-            $set: {
-              fetch_req_body: requestPayload,
-              fetch_requestId: requestPayload.requestId,
-            },
-          }
-        );
-      } else {
-        await M1Database.insertOne({
-          healthID,
-          fetch_req_body: requestPayload,
-          fetch_requestId: requestPayload.requestId,
-        });
-      }
-    } catch (dbOperationError) {
-      console.error("Error performing database operation:", dbOperationError);
-      res.status(500).json({ error: "Database operation failed" });
-      return;
-    }
+    // Save the request in DB
+    const M1Database = await connectToDB();
+    await M1Database.updateOne(
+      { healthID },
+      {
+        $set: {
+          link_token_req_body: requestPayload,
+          link_token_requestId: requestPayload.requestId,
+        },
+      },
+      { upsert: true }
+    );
 
     res.status(response.status).json(response.data);
   } catch (generalError) {
-    console.error("Unexpected error in fetch-modes:", generalError);
+    console.error("Unexpected error in generateLinkToken:", generalError);
     res.status(500).json({ error: "An unexpected error occurred" });
-    return;
   }
 };
 
-export const authInit = async (req: Request, res: Response) => {
+// 2. Confirm Authentication
+export const confirmAuth = async (req: Request, res: Response) => {
   try {
     const requestBody = req.body;
     const healthID = requestBody.query.id;
@@ -138,7 +121,7 @@ export const authInit = async (req: Request, res: Response) => {
       { headers: newHeaders }
     );
 
-    // Save transactionId and other details in DB
+    // Save transactionId in DB
     const M1Database = await connectToDB();
     await M1Database.updateOne(
       { healthID },
@@ -154,7 +137,53 @@ export const authInit = async (req: Request, res: Response) => {
 
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error("Error in authInit:", error);
-    res.status(500).json({ error: "An error occurred during auth init" });
+    console.error("Error in confirmAuth:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred during auth confirmation" });
+  }
+};
+
+// 3. Link Care Context
+export const linkCareContext = async (req: Request, res: Response) => {
+  try {
+    const requestBody = req.body;
+    const transactionId = requestBody.transactionId;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: "Transaction ID is missing." });
+    }
+
+    const newHeaders = {
+      "Content-Type": "application/json",
+      "X-CM-ID": "sbx",
+      Authorization: await getGatewayAccessToken(),
+    };
+
+    const requestPayload = {
+      requestId: uuidv4(),
+      timestamp: new Date().toISOString(),
+      link: {
+        careContext: [
+          {
+            careContextId: requestBody.careContextId,
+            display: requestBody.display,
+          },
+        ],
+      },
+    };
+
+    const response = await axios.post(
+      process.env.LINK_CARE_CONTEXT_URL!,
+      requestPayload,
+      { headers: newHeaders }
+    );
+
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error("Error in linkCareContext:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while linking care context" });
   }
 };

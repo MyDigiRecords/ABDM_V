@@ -1,15 +1,17 @@
 import axios from "axios";
 import NodeRSA from "node-rsa";
 import { Buffer } from "buffer";
-import { v4 as uuidv4 } from "uuid";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 export const getGatewayAccessToken = async (): Promise<string> => {
   const GATEWAY_URL = "https://dev.abdm.gov.in/api/hiecm/gateway/v3/sessions";
   const headers = { "Content-Type": "application/json" };
 
   const bodyParams = JSON.stringify({
-    clientId: "SBX_002737",
-    clientSecret: "0268b4b2-6a4e-4ea4-8142-6a1d8d14b3c7",
+    clientId: process.env.CLIENT_ID!,
+    clientSecret: process.env.CLIENT_SECRET!,
     grantType: "client_credentials",
   });
 
@@ -22,7 +24,6 @@ export const getGatewayAccessToken = async (): Promise<string> => {
   }
 };
 
-// Helper to encrypt data using public key
 export const getEncryptedData = async (
   token: string,
   data: string
